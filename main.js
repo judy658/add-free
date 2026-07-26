@@ -233,10 +233,13 @@ function setTheaterMode(on) {
 }
 
 function applyVolumeToPlayerUiOnly() {
+  if (!els.volumeValue) return;
   els.volumeValue.textContent = String(playerState.volume);
 }
 
 function updatePlayPauseUi(isPlaying) {
+  // Custom controls removed on purpose; keep safe no-op.
+  if (!els.playPauseBtn) return;
   els.playPauseBtn.textContent = isPlaying ? '⏸' : '⏯';
 }
 
@@ -340,7 +343,12 @@ function ensureSearchUi() {
     <div id="searchResultsGrid" class="search-grid" role="list"></div>
   `;
 
-  topbar.insertAdjacentElement('afterend', wrap);
+  const playerShell = $('#playerShell');
+  if (playerShell) {
+    playerShell.insertAdjacentElement('afterend', wrap);
+  } else {
+  
+  }
 
   if (!document.getElementById('search-results-css')) {
     const style = document.createElement('style');
@@ -370,6 +378,7 @@ function setSearchResultsVisible(on) {
   const wrap = $('#searchResultsWrap');
   if (!wrap) return;
   wrap.hidden = !on;
+  if (on) wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function setSearchLoading(on, text) {
@@ -707,10 +716,10 @@ async function fetchSearchResults({ q }) {
   return await fetchInvidiousSearchResults({ q });
 }
 
-function renderSearchResults(items) {
+function renderSearchResults(items, { append = false } = {}) {
   const grid = $('#searchResultsGrid');
   if (!grid) return;
-  grid.innerHTML = '';
+  if (!append) grid.innerHTML = '';
 
   if (!items?.length) {
     grid.innerHTML = `<div class="muted" style="grid-column: 1 / -1; padding: 8px 0;">No results.</div>`;
@@ -767,6 +776,9 @@ function renderSearchResults(items) {
 
 async function runSearchFromInput() {
   ensureSearchUi();
+  // Infinite scroll: render in batches while user scrolls.
+  // We'll keep all items (as requested) but append progressively.
+
 
   const raw = els.urlInput.value;
   const query = String(raw || '').trim();
@@ -789,10 +801,50 @@ async function runSearchFromInput() {
   try {
     const { items, instance } = await fetchSearchResults({ q: query });
     if (instance && instance !== 'google') playerState.invidiousInstance = instance;
-    renderSearchResults(items);
+
+    // Render all items, but progressively append while user scrolls (infinite scroll).
+    const chunkSize = 24;
+    const all = items || [];
+    let index = 0;
+
+    const grid = $('#searchResultsGrid');
+    grid.innerHTML = '';
+
+    const appendNext = () => {
+      const slice = all.slice(index, index + chunkSize);
+      index += slice.length;
+      renderSearchResults(slice, { append: true });
+      return slice.length > 0;
+    };
+
+    // append first chunk
+    appendNext();
+
+    let loadingMore = false;
+    const io = new IntersectionObserver(
+      (entries) => {
+        const e = entries[0];
+        if (!e || !e.isIntersecting) return;
+        if (loadingMore) return;
+        loadingMore = true;
+        const hasMore = appendNext();
+        if (!hasMore) {
+          io.disconnect();
+        }
+        loadingMore = false;
+      },
+      { root: null, threshold: 0.1 }
+    );
+
+    const sentinel = document.createElement('div');
+    sentinel.id = 'searchInfiniteSentinel';
+    sentinel.style.height = '1px';
+    grid.appendChild(sentinel);
+
+    io.observe(sentinel);
     setSearchLoading(false);
   } catch {
-    renderSearchResults([]);
+    renderSearchResults([], { append: false });
     setSearchLoading(false, 'Search failed. Try again.');
   }
 }
