@@ -856,22 +856,7 @@ function init() {
     });
   });
 
-  els.playPauseBtn.addEventListener('click', () => {
-    const isPlaying = els.playPauseBtn.textContent === '⏸';
-    updatePlayPauseUi(!isPlaying);
-  });
-
-  els.muteBtn.addEventListener('click', () => {
-    playerState.muted = !playerState.muted;
-    els.muteBtn.textContent = playerState.muted ? '🔇' : '🔊';
-  });
-
-  els.volumeRange.addEventListener('input', () => {
-    playerState.volume = Number(els.volumeRange.value);
-    applyVolumeToPlayerUiOnly();
-  });
-
-  els.fullscreenBtn.addEventListener('click', toggleFullscreen);
+  // Custom player controls removed (use YouTube native controls).
 
   els.videoFrame.addEventListener('load', () => showEmbedError(false));
 
